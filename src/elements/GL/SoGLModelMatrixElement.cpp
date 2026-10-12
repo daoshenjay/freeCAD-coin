@@ -136,9 +136,14 @@ SoGLModelMatrixElement::pop(SoState * stateptr,
     prevTopElement;
 
   if (prev->stackoverflow) {
-    SbMatrix mat = SoGLViewingMatrixElement::getResetMatrix(this->state);
-    mat.multLeft(this->modelMatrix);
-    glLoadMatrixf(mat[0]);
+    if (SoGLViewingMatrixElement::useFullCompositing(this->state)) {
+      SoGLViewingMatrixElement::loadFullMatrix(this->state, this->modelMatrixDP);
+    }
+    else {
+      SbMatrix mat = SoGLViewingMatrixElement::getResetMatrix(this->state);
+      mat.multLeft(this->modelMatrix);
+      glLoadMatrixf(mat[0]);
+    }
   }
   else {
     glPopMatrix();
@@ -150,8 +155,14 @@ SoGLModelMatrixElement::pop(SoState * stateptr,
 void
 SoGLModelMatrixElement::makeEltIdentity()
 {
-  SbMatrix mat = SoGLViewingMatrixElement::getResetMatrix(this->state);
-  glLoadMatrixf(mat[0]);
+  if (SoGLViewingMatrixElement::useFullCompositing(this->state)) {
+    SoGLViewingMatrixElement::loadFullMatrix(this->state,
+                                             SbDPMatrix::identity());
+  }
+  else {
+    SbMatrix mat = SoGLViewingMatrixElement::getResetMatrix(this->state);
+    glLoadMatrixf(mat[0]);
+  }
   inherited::makeEltIdentity();
 }
 
@@ -160,9 +171,14 @@ SoGLModelMatrixElement::makeEltIdentity()
 void
 SoGLModelMatrixElement::setElt(const SbMatrix & matrix)
 {
-  SbMatrix mat = SoGLViewingMatrixElement::getResetMatrix(this->state);
-  mat.multLeft(matrix);
-  glLoadMatrixf(mat[0]);
+  if (SoGLViewingMatrixElement::useFullCompositing(this->state)) {
+    SoGLViewingMatrixElement::loadFullMatrix(this->state, SbDPMatrix(matrix));
+  }
+  else {
+    SbMatrix mat = SoGLViewingMatrixElement::getResetMatrix(this->state);
+    mat.multLeft(matrix);
+    glLoadMatrixf(mat[0]);
+  }
   inherited::setElt(matrix);
 }
 
@@ -171,8 +187,14 @@ SoGLModelMatrixElement::setElt(const SbMatrix & matrix)
 void
 SoGLModelMatrixElement::multElt(const SbMatrix &matrix)
 {
-  glMultMatrixf(matrix[0]);
-  inherited::multElt(matrix);
+  if (SoGLViewingMatrixElement::useFullCompositing(this->state)) {
+    inherited::multElt(matrix);
+    SoGLViewingMatrixElement::loadFullMatrix(this->state, this->modelMatrixDP);
+  }
+  else {
+    glMultMatrixf(matrix[0]);
+    inherited::multElt(matrix);
+  }
 }
 
 //! FIXME: write doc.
@@ -180,8 +202,14 @@ SoGLModelMatrixElement::multElt(const SbMatrix &matrix)
 void
 SoGLModelMatrixElement::translateEltBy(const SbVec3f &translation)
 {
-  glTranslatef(translation[0], translation[1], translation[2]);
-  inherited::translateEltBy(translation);
+  if (SoGLViewingMatrixElement::useFullCompositing(this->state)) {
+    inherited::translateEltBy(translation);
+    SoGLViewingMatrixElement::loadFullMatrix(this->state, this->modelMatrixDP);
+  }
+  else {
+    glTranslatef(translation[0], translation[1], translation[2]);
+    inherited::translateEltBy(translation);
+  }
 }
 
 //! FIXME: write doc.
@@ -189,11 +217,17 @@ SoGLModelMatrixElement::translateEltBy(const SbVec3f &translation)
 void
 SoGLModelMatrixElement::rotateEltBy(const SbRotation &rotation)
 {
-  SbVec3f axis;
-  float angle;
-  rotation.getValue(axis, angle);
-  glRotatef(angle*180.0f/float(M_PI), axis[0], axis[1], axis[2]);
-  inherited::rotateEltBy(rotation);
+  if (SoGLViewingMatrixElement::useFullCompositing(this->state)) {
+    inherited::rotateEltBy(rotation);
+    SoGLViewingMatrixElement::loadFullMatrix(this->state, this->modelMatrixDP);
+  }
+  else {
+    SbVec3f axis;
+    float angle;
+    rotation.getValue(axis, angle);
+    glRotatef(angle*180.0f/float(M_PI), axis[0], axis[1], axis[2]);
+    inherited::rotateEltBy(rotation);
+  }
 }
 
 //! FIXME: write doc.
@@ -201,8 +235,14 @@ SoGLModelMatrixElement::rotateEltBy(const SbRotation &rotation)
 void
 SoGLModelMatrixElement::scaleEltBy(const SbVec3f &scaleFactor)
 {
-  glScalef(scaleFactor[0], scaleFactor[1], scaleFactor[2]);
-  inherited::scaleEltBy(scaleFactor);
+  if (SoGLViewingMatrixElement::useFullCompositing(this->state)) {
+    inherited::scaleEltBy(scaleFactor);
+    SoGLViewingMatrixElement::loadFullMatrix(this->state, this->modelMatrixDP);
+  }
+  else {
+    glScalef(scaleFactor[0], scaleFactor[1], scaleFactor[2]);
+    inherited::scaleEltBy(scaleFactor);
+  }
 }
 
 //! FIXME: write doc.

@@ -53,10 +53,11 @@ public:
 
   void scaleHeight(float scalefactor) override;
   SbViewVolume getViewVolume(float useaspectratio = 0.0f) const override;
+  using SoCamera::viewBoundingBox;
+  void viewBoundingBox(const SbBox3d & box, double aspect, double slack) override;
 
 protected:
   virtual ~SoFrustumCamera();
-  void viewBoundingBox(const SbBox3f & box, float aspect, float slack) override;
 };
 
 #endif // COIN_SOFRUSTUM_CAMERA_H

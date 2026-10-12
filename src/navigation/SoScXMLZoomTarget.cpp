@@ -430,8 +430,8 @@ SoScXMLZoomTarget::zoom(SoCamera * camera, float multiplicator)
     SbVec3f direction;
     camera->orientation.getValue().multVec(SbVec3f(0, 0, -1), direction);
 
-    const SbVec3f oldpos = camera->position.getValue();
-    const SbVec3f newpos = oldpos + (newfocaldist - oldfocaldist) * -direction;
+    const SbVec3d oldpos = camera->position.getValue();
+    const SbVec3d newpos = oldpos + SbVec3d(-direction) * double(newfocaldist - oldfocaldist);
 
     // This catches a rather common user interface "buglet": if the
     // user zooms the camera out to a distance from origo larger than
@@ -447,7 +447,7 @@ SoScXMLZoomTarget::zoom(SoCamera * camera, float multiplicator)
     // should also check distorigo with isinf() and isnan() (or
     // inversely; isinfite()), but those only became standardized with
     // C99.)
-    const float distorigo = newpos.length();
+    const float distorigo = float(newpos.length());
     // sqrt(FLT_MAX) == ~ 1e+19, which should be both safe for further
     // calculations and ok for the end-user and app-programmer.
     if (distorigo > float(sqrt(FLT_MAX))) {

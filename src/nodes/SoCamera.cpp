@@ -85,7 +85,7 @@
     // geometry will be kept static.
 
     SoPerspectiveCamera * pcam = new SoPerspectiveCamera;
-    pcam->position = SbVec3f(0, 0, 5);
+    pcam->position = SbVec3d(0, 0, 5);
     pcam->nearDistance = 0.1;
     pcam->farDistance = 10;
     root->addChild(pcam);
@@ -309,9 +309,22 @@
   exact dimensions with a \a slack factor to have some space between
   the rendered model and the borders of the rendering area.
 
+  Converts the float32 box to a double precision box and calls the
+  double precision SoCamera::viewBoundingBox() overload, which does
+  the actual work.
+
   If you define your own camera node class, be aware that this method
   should \e not set the orientation field of the camera, only the
   position, focal distance and near and far clipping planes.
+*/
+
+/*!
+  \fn void SoCamera::viewBoundingBox(const SbBox3d & box, double aspect, double slack)
+
+  Double precision version of the float32 overload above. Camera
+  subclasses implement this method; all computation must be done in
+  double precision, as float32 cannot represent offsets below ~64 mm
+  at coordinates around 1e9 mm.
 */
 
 /*!
@@ -486,14 +499,18 @@ SoCamera::getViewVolume(const SbViewportRegion & vp,
 void
 SoCamera::pointAt(const SbVec3f & targetpoint)
 {
-  SbVec3f dir = targetpoint - this->position.getValue();
-  if (dir.normalize() == 0.0f) {
+  // Direction in double: the difference of two float32-sized absolute
+  // coordinates would cancel to zero beyond 2^24.
+  SbVec3d dir64 = SbVec3d(targetpoint[0], targetpoint[1], targetpoint[2])
+    - this->position.getValue();
+  if (dir64.normalize() == 0.0) {
 #if COIN_DEBUG
     SoDebugError::postInfo("SoCamera::pointAt",
                            "targetpoint == camera position.");
 #endif // debug
     return;
   }
+  SbVec3f dir(dir64);
 
   SbVec3f up(0.0f, 1.0f, 0.0f);
 
@@ -511,15 +528,31 @@ SoCamera::pointAt(const SbVec3f & targetpoint)
 void
 SoCamera::pointAt(const SbVec3f & targetpoint, const SbVec3f & upvector)
 {
-  SbVec3f dir = targetpoint - this->position.getValue();
-  if (dir.normalize() == 0.0f) {
+  // Direction in double, see the other pointAt() overload.
+  SbVec3d dir64 = SbVec3d(targetpoint[0], targetpoint[1], targetpoint[2])
+    - this->position.getValue();
+  if (dir64.normalize() == 0.0) {
 #if COIN_DEBUG
     SoDebugError::postInfo("SoCamera::pointAt",
                            "targetpoint == camera position.");
 #endif // debug
     return;
   }
+  SbVec3f dir(dir64);
   this->lookAt(dir, upvector);
+}
+
+// Float32 boxes lose sub-ULP geometry at large coordinates (the ULP is
+// 64 mm at 1e9 mm), so pass them on unchanged to the double precision
+// implementation instead of fitting in float32.
+void
+SoCamera::viewBoundingBox(const SbBox3f & box, float aspect, float slack)
+{
+  float bxmin, bymin, bzmin, bxmax, bymax, bzmax;
+  box.getBounds(bxmin, bymin, bzmin, bxmax, bymax, bzmax);
+  this->viewBoundingBox(SbBox3d(SbVec3d(bxmin, bymin, bzmin),
+                                SbVec3d(bxmax, bymax, bzmax)),
+                        double(aspect), double(slack));
 }
 
 // FIXME: should collect common code from the two viewAll() methods
@@ -661,9 +694,11 @@ SoCamera::GLRender(SoGLRenderAction * action)
   this->getView(action, vv, vp, FALSE);
 
   SbMatrix affine, proj;
+  SbDPMatrix affinedp;
   if (vv.getDepth() == 0.0f || vv.getWidth() == 0.0f || vv.getHeight() == 0.0f) {
     // Handle empty scenes.
     affine = proj = SbMatrix::identity();
+    affinedp = SbDPMatrix::identity();
   }
   else {
     if (this->stereomode != MONOSCOPIC) {
@@ -699,14 +734,19 @@ SoCamera::GLRender(SoGLRenderAction * action)
       vv.transform(affine);
       // read out the stereo view volume
       vv.getMatrices(affine, proj);
+      affinedp = SbDPMatrix(affine);
     }
     else {
-      vv.getMatrices(affine, proj);
+      // Double precision view matrix: keeps the world->eye offset
+      // exact for absolute coordinates beyond float32 resolution.
+      SbDPMatrix projdp;
+      vv.getMatrices(affinedp, projdp);
+      proj = SbMatrix(projdp);
     }
     SbBool identity;
     const SbMatrix & mm = SoModelMatrixElement::get(state, identity);
     if (!identity) {
-      affine.multRight(mm.inverse());
+      affinedp.multRight(SbDPMatrix(mm.inverse()));
       vv.transform(SoModelMatrixElement::get(state));
     }
     SoCullElement::setViewVolume(state, vv);
@@ -722,7 +762,7 @@ SoCamera::GLRender(SoGLRenderAction * action)
     proj.multRight(m);
   }
   SoProjectionMatrixElement::set(state, this, proj);
-  SoViewingMatrixElement::set(state, this, affine);
+  SoViewingMatrixElement::setDP(state, this, affinedp);
   SoFocalDistanceElement::set(state, this, this->focalDistance.getValue());
 }
 
@@ -736,7 +776,7 @@ SoCamera::audioRender(SoAudioRenderAction *action)
   setbylistener = SoListenerPositionElement::isSetByListener(state);
   if ((! setbylistener) &&  (! this->position.isIgnored())) {
     SbVec3f pos, worldpos;
-    pos = this->position.getValue();
+    pos = SbVec3f(this->position.getValue());
     SoModelMatrixElement::get(action->getState()).multVecMatrix(pos, worldpos);
     SoListenerPositionElement::set(state, this, worldpos, FALSE);
 #if COIN_DEBUG && 0
@@ -839,24 +879,28 @@ SoCamera::doAction(SoAction * action)
   SbViewVolume vv;
   this->getView(action, vv, vp, FALSE);
 
-  SbMatrix affine, proj;
+  SbMatrix proj;
+  SbDPMatrix affinedp;
   if (vv.getDepth() == 0.0f || vv.getWidth() == 0.0f || vv.getHeight() == 0.0f) {
     // Handle empty scenes.
-    affine = proj = SbMatrix::identity();
+    proj = SbMatrix::identity();
+    affinedp = SbDPMatrix::identity();
   }
   else {
-    vv.getMatrices(affine, proj);
+    SbDPMatrix projdp;
+    vv.getMatrices(affinedp, projdp);
+    proj = SbMatrix(projdp);
 
     SbBool identity;
     const SbMatrix & mm = SoModelMatrixElement::get(state, identity);
     if (!identity) {
       vv.transform(mm);
-      affine.multRight(mm.inverse());
+      affinedp.multRight(SbDPMatrix(mm.inverse()));
     }
   }
   SoViewVolumeElement::set(state, this, vv);
   SoProjectionMatrixElement::set(state, this, proj);
-  SoViewingMatrixElement::set(state, this, affine);
+  SoViewingMatrixElement::setDP(state, this, affinedp);
   SoFocalDistanceElement::set(state, this, this->focalDistance.getValue());
 }
 

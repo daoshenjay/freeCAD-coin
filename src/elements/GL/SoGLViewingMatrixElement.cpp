@@ -126,28 +126,48 @@ void
 SoGLViewingMatrixElement::setElt(const SbMatrix & matrix)
 {
   inherited::setElt(matrix);
+  this->afterset();
+}
+
+/*!
+  Double precision variant of setElt(), see SoViewingMatrixElement.
+*/
+void
+SoGLViewingMatrixElement::setEltDP(const SbDPMatrix & matrix)
+{
+  inherited::setEltDP(matrix);
+  this->afterset();
+}
+
+void
+SoGLViewingMatrixElement::afterset(void)
+{
   this->modelmatrix = SoModelMatrixElement::get(this->state, this->mmidentity);
   if (this->state->isElementEnabled(SoResetMatrixElement::getClassStackIndex())) {
-    SbMatrix mat = this->viewingMatrix;
+    SbDPMatrix mat = this->viewingMatrixDP;
     if (!this->mmidentity) {
-      mat.multRight(this->modelmatrix);
-      mat.multLeft(this->modelmatrix.inverse());
+      mat.multRight(SbDPMatrix(this->modelmatrix));
+      mat.multLeft(SbDPMatrix(this->modelmatrix.inverse()));
     }
-    SoResetMatrixElement::set(this->state, mat);
+    SoResetMatrixElement::set(this->state, SbMatrix(mat));
   }
   this->updategl();
 }
 
 // sends the current viewing matrix to GL. Eliminates the model matrix
 // part of the matrix, since a GL matrix is always located in 0 0 0.
+// The composition runs in double; download via glLoadMatrixd so the
+// camera translation (~1e9 mm) is not narrowed to float32 before the
+// model matrix translation is added (the f32 rounding error would be
+// up to 32 mm at 1e9 mm and push small objects out of the view frustum).
 void
 SoGLViewingMatrixElement::updategl(void)
 {
-  SbMatrix mat = this->viewingMatrix;
+  SbDPMatrix mat = this->viewingMatrixDP;
   if (!this->mmidentity) {
-    mat.multRight(this->modelmatrix);
+    mat.multRight(SbDPMatrix(this->modelmatrix));
   }
-  glLoadMatrixf((float*)mat);
+  glLoadMatrixd(&mat.getValue()[0][0]);
 }
 
 /*!
@@ -170,13 +190,49 @@ SoGLViewingMatrixElement::getResetMatrix(SoState * state)
   const SoGLViewingMatrixElement * element = (const SoGLViewingMatrixElement *)
     SoElement::getConstElement(state, classStackIndex);
 
-  SbMatrix mat = element->viewingMatrix;
+  SbDPMatrix mat = element->viewingMatrixDP;
   if (!element->mmidentity) {
     // first eliminate model matrix part of matrix
-    mat.multRight(element->modelmatrix);
+    mat.multRight(SbDPMatrix(element->modelmatrix));
     // then move geometry to account for the transformations prior to
     // the camera
-    mat.multLeft(element->modelmatrix.inverse());
+    mat.multLeft(SbDPMatrix(element->modelmatrix.inverse()));
   }
-  return mat;
+  return SbMatrix(mat);
+}
+
+/*!
+  Returns TRUE when the scene has no transformations preceding the
+  camera, i.e. when the GL modelview matrix can be downloaded as the
+  single product modelmatrix * viewingMatrix composed in double
+  precision by loadFullMatrix().
+*/
+SbBool
+SoGLViewingMatrixElement::useFullCompositing(SoState * state)
+{
+  const SoGLViewingMatrixElement * element = (const SoGLViewingMatrixElement *)
+    SoElement::getConstElement(state, classStackIndex);
+  return element->mmidentity;
+}
+
+/*!
+  Downloads the complete modelview matrix (modelmatrix * viewingMatrix)
+  to GL with the composition carried out in double precision. With
+  float32 composition the camera translation (e.g. ~1e9 mm) would be
+  narrowed before the model translation is added, losing the small
+  world difference between them (up to 32 mm at 1e9 mm) and pushing
+  small objects out of the view frustum.
+
+  Only valid when useFullCompositing() returns TRUE; otherwise the
+  caller must keep the classic reset-matrix based download.
+*/
+void
+SoGLViewingMatrixElement::loadFullMatrix(SoState * state,
+                                         const SbDPMatrix & modelmatrix)
+{
+  const SoGLViewingMatrixElement * element = (const SoGLViewingMatrixElement *)
+    SoElement::getConstElement(state, classStackIndex);
+  SbDPMatrix mat(modelmatrix);
+  mat.multRight(element->viewingMatrixDP);
+  glLoadMatrixd(&mat.getValue()[0][0]);
 }

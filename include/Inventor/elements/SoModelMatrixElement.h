@@ -34,6 +34,7 @@
 \**************************************************************************/
 
 #include <Inventor/elements/SoAccumulatedElement.h>
+#include <Inventor/SbDPMatrix.h>
 #include <Inventor/SbMatrix.h>
 #include <Inventor/lists/SbPList.h>
 
@@ -85,6 +86,15 @@ protected:
 
 protected:
   SbMatrix modelMatrix;
+  // Double precision shadow of modelMatrix, updated with the same
+  // operations in the same order. The float32 modelMatrix rounds to the
+  // float32 ULP of absolute coordinates (64 mm at 1e9 mm), which destroys
+  // viewport-sized local offsets once a large absolute anchor translation
+  // has been accumulated; the double shadow keeps them exact for the
+  // double precision GL download (SoGLViewingMatrixElement::loadFullMatrix).
+  // Consumers of get()/getCombinedCullMatrix() keep the float32 value and
+  // therefore see unchanged (legacy) behaviour.
+  SbDPMatrix modelMatrixDP;
   SbMatrix cullMatrix;
   SbMatrix combinedMatrix;
   uint32_t flags;

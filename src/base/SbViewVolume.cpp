@@ -203,6 +203,17 @@ SbViewVolume::getMatrices(SbMatrix& affine, SbMatrix& proj) const
 }
 
 /*!
+  Double precision variant of getMatrices(). Returns the matrices
+  straight from the double precision internal view volume without
+  narrowing to float.
+*/
+void
+SbViewVolume::getMatrices(SbDPMatrix& affine, SbDPMatrix& proj) const
+{
+  this->dpvv.getMatrices(affine, proj);
+}
+
+/*!
   Returns the combined affine and projection matrix.
 
   \sa getMatrices(), getCameraSpaceMatrix()
@@ -516,6 +527,17 @@ SbViewVolume::translateCamera(const SbVec3f & v)
 {
   SbVec3d dpv(v[0], v[1], v[2]);
   this->dpvv.translateCamera(dpv);
+  this->dpvv.copyValues(*this);
+}
+
+/*!
+  Double precision variant of translateCamera(): keeps sub-float32
+  camera offsets exact at absolute coordinates beyond 2^24.
+*/
+void
+SbViewVolume::translateCamera(const SbVec3d & v)
+{
+  this->dpvv.translateCamera(v);
   this->dpvv.copyValues(*this);
 }
 

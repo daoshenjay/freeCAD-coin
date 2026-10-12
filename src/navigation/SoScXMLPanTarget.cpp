@@ -371,7 +371,7 @@ SoScXMLPanTarget::panCamera(SoCamera * camera,
   // Reposition camera according to the vector difference between the
   // projected points.
   camera->position =
-    camera->position.getValue() - (current_planept - old_planept);
+    camera->position.getValue() - SbVec3d(current_planept - old_planept);
 }
 
 void
@@ -384,7 +384,7 @@ SoScXMLPanTarget::panSetFocalPoint(SoCamera * camera, const SbVec3f & focalpoint
   camera->orientation.getValue().multVec(SbVec3f(0.0f, 0.0f, -1.0f), direction);
   direction.normalize();
 
-  camera->position.setValue(focalpoint - direction * currentdistance);
+  camera->position.setValue(SbVec3d(focalpoint) - SbVec3d(direction) * double(currentdistance));
 }
 
 void
@@ -392,12 +392,12 @@ SoScXMLPanTarget::translateCamera(SoCamera * camera, const SbVec3f & translation
 {
   assert(camera);
   if (!cameraspace) {
-    camera->position.setValue(camera->position.getValue() + translation);
+    camera->position.setValue(camera->position.getValue() + SbVec3d(translation));
   }
   else {
     SbVec3f transformed;
     camera->orientation.getValue().multVec(translation, transformed);
-    camera->position.setValue(camera->position.getValue() + transformed);
+    camera->position.setValue(camera->position.getValue() + SbVec3d(transformed));
   }
 }
 

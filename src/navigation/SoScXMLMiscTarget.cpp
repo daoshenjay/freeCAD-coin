@@ -279,7 +279,7 @@ SoScXMLMiscTarget::processOneEvent(const ScXMLEvent * event)
       return FALSE;
     }
 
-    camera->position.setValue(position);
+    camera->position.setValue(SbVec3d(position));
   }
 
   else {

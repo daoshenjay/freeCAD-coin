@@ -35,6 +35,7 @@
 
 #include <Inventor/elements/SoReplacedElement.h>
 #include <Inventor/SbMatrix.h>
+#include <Inventor/SbDPMatrix.h>
 
 class COIN_DLL_API SoViewingMatrixElement : public SoReplacedElement {
   typedef SoReplacedElement inherited;
@@ -49,11 +50,19 @@ public:
   void init(SoState * state) override;
   static  void set(SoState * const state, SoNode * const node,
                    const SbMatrix & ViewingMatrix);
+  // Double precision variant: world->eye translation stays exact for
+  // absolute coordinates beyond float32 resolution (the f32 member is
+  // kept as a lossy copy for the classic get() API).
+  static  void setDP(SoState * const state, SoNode * const node,
+                     const SbDPMatrix & ViewingMatrix);
   static  const SbMatrix &get(SoState * const state);
+  static  const SbDPMatrix &getDP(SoState * const state);
 
 protected:
   virtual void setElt(const SbMatrix &matrix);
+  virtual void setEltDP(const SbDPMatrix &matrix);
   SbMatrix viewingMatrix;
+  SbDPMatrix viewingMatrixDP;
 
 };
 

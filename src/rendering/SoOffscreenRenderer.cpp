@@ -1729,8 +1729,10 @@ SoOffscreenRendererP::setCameraViewvolForTile(SoCamera * cam)
   // Reshape view volume
   vv = vv.narrow(left, bottom, right, top);
 
-  SbMatrix proj, affine;
-  vv.getMatrices(affine, proj);
+  SbMatrix proj;
+  SbDPMatrix affinedp, projdp;
+  vv.getMatrices(affinedp, projdp);
+  proj = SbMatrix(projdp);
 
   // Support antialiasing if renderpasses > 1
   if (renderaction->getNumPasses() > 1) {
@@ -1745,7 +1747,7 @@ SoOffscreenRendererP::setCameraViewvolForTile(SoCamera * cam)
   SoCullElement::setViewVolume(state, vv);
   SoViewVolumeElement::set(state, cam, vv);
   SoProjectionMatrixElement::set(state, cam, proj);
-  SoViewingMatrixElement::set(state, cam, affine);
+  SoViewingMatrixElement::setDP(state, cam, affinedp);
 }
 
 // *************************************************************************

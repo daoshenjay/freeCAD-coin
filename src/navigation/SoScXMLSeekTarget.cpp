@@ -70,7 +70,7 @@ public:
   SbBool seeking;
   SbTime seekstart;
   float seektime;
-  SbVec3f camerastartposition, cameraendposition;
+  SbVec3d camerastartposition, cameraendposition;
   SbRotation camerastartorient, cameraendorient;
 };
 
@@ -307,18 +307,18 @@ SoScXMLSeekTarget::processOneEvent(const ScXMLEvent * event)
     camerainverse.multVecMatrix(hitpoint, hitpoint);
 
     float fd = 25;
-    fd *= (hitpoint - camera->position.getValue()).length()/100.0f;
+    fd *= float((SbVec3d(hitpoint) - camera->position.getValue()).length() / 100.0);
     camera->focalDistance = fd;
 
-    SbVec3f dir = hitpoint - data->camerastartposition;
+    SbVec3d dir = SbVec3d(hitpoint) - data->camerastartposition;
     dir.normalize();
 
     // find a rotation that rotates current camera direction into new
     // camera direction.
     SbVec3f olddir;
     camera->orientation.getValue().multVec(SbVec3f(0, 0, -1), olddir);
-    SbRotation diffrot(olddir, dir);
-    data->cameraendposition = hitpoint - fd * dir;
+    SbRotation diffrot(olddir, SbVec3f(dir));
+    data->cameraendposition = SbVec3d(hitpoint) - SbVec3d(dir) * double(fd);
     data->cameraendorient = camera->orientation.getValue() * diffrot;
 
     data->seeking = TRUE;

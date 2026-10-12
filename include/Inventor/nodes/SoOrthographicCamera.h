@@ -49,7 +49,8 @@ public:
 
   void scaleHeight(float scalefactor) override;
   SbViewVolume getViewVolume(float useaspectratio = 0.0f) const override;
-  void viewBoundingBox(const SbBox3f & box, float aspect, float slack) override;
+  using SoCamera::viewBoundingBox;
+  void viewBoundingBox(const SbBox3d & box, double aspect, double slack) override;
 
 protected:
   virtual ~SoOrthographicCamera();

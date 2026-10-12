@@ -1124,7 +1124,7 @@ SoShadowLightCache::toCameraSpace(const SbXfBox3f & worldbox) const
   SoCamera * cam = this->camera;
   SbMatrix mat;
   SbXfBox3f xbox = worldbox;
-  mat.setTranslate(- cam->position.getValue());
+  mat.setTranslate(SbVec3f(-cam->position.getValue()));
   xbox.transform(mat);
   mat = cam->orientation.getValue().inverse();
   xbox.transform(mat);
@@ -1145,7 +1145,7 @@ SoShadowGroupP::updateSpotCamera(SoState * COIN_UNUSED_ARG(state), SoShadowLight
   transform.multDirMatrix(dir, dir);
   (void) dir.normalize();
   float cutoff = light->cutOffAngle.getValue();
-  cam->position.setValue(pos);
+  cam->position.setValue(SbVec3d(pos));
   // the maximum heightAngle we can render with a camera is < PI/2,.
   // The max cutoff is therefore PI/4. Some slack is needed, and 0.78
   // is about the maximum angle we can do.
@@ -1285,7 +1285,7 @@ SoShadowGroupP::updateDirectionalCamera(SoState * state, SoShadowLightCache * ca
   cam->nearDistance = -box.getMax()[2]*1.01f;
   cam->farDistance = -box.getMin()[2]*1.01f;
 
-  SbPlane plane(dir, cam->position.getValue());
+  SbPlane plane(dir, SbVec3f(cam->position.getValue()));
   // move to eye space
   plane.transform(SoViewingMatrixElement::get(state));
   SbVec3f N = plane.getNormal();
@@ -2291,7 +2291,7 @@ SoShadowLightCache::createGaussSG(SoShaderProgram * program, SoSceneTexture2 * t
 
   sep->addChild(sh);
 
-  camera->position = SbVec3f(0.5f, 0.5f, 2.0f);
+  camera->position = SbVec3d(0.5, 0.5, 2.0);
   camera->height = 1.0f;
   camera->aspectRatio = 1.0f;
   camera->viewportMapping = SoCamera::LEAVE_ALONE;

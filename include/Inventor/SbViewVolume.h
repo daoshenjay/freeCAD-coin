@@ -55,6 +55,10 @@ public:
   SbViewVolume(void);
   ~SbViewVolume(void);
   void getMatrices(SbMatrix& affine, SbMatrix& proj) const;
+  // Double precision variants: keep the camera offset exact for absolute
+  // coordinates beyond float32 resolution (the f32 result is a lossy
+  // copy of the double internal dpvv).
+  void getMatrices(SbDPMatrix& affine, SbDPMatrix& proj) const;
   SbMatrix getMatrix(void) const;
   SbMatrix getCameraSpaceMatrix(void) const;
   void projectPointToLine(const SbVec2f& pt, SbLine& line) const;
@@ -82,6 +86,7 @@ public:
                float nearval, float farval);
   void rotateCamera(const SbRotation& q);
   void translateCamera(const SbVec3f& v);
+  void translateCamera(const SbVec3d& v);
   SbVec3f zVector(void) const;
   SbViewVolume zNarrow(float nearval, float farval) const;
   void scale(float factor);

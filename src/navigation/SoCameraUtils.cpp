@@ -344,8 +344,8 @@ SoOrthoPerspectiveCameraManager::setZoomValueByDolly(float zoomvalue, SbBool lim
   float focaldistance = camera->focalDistance.getValue();
   SbVec3f projdir(0.0f, 0.0f, 0.0f);
   camera->orientation.getValue().multVec(SbVec3f(0.0f, 0.0f, -1.0f), projdir);
-  SbVec3f focalpoint = camera->position.getValue() + projdir * focaldistance;
-  camera->position.setValue(focalpoint - projdir * newdistance);
+  SbVec3d focalpoint = camera->position.getValue() + SbVec3d(projdir) * double(focaldistance);
+  camera->position.setValue(focalpoint - SbVec3d(projdir) * double(newdistance));
   camera->focalDistance.setValue(newdistance);
   camera->height.setValue(newheight);
 
@@ -469,10 +469,10 @@ SoPerspectiveCameraManager::setZoomValueByDolly(float zoomvalue, SbBool COIN_UNU
   float focaldistance = camera->focalDistance.getValue();
   SbVec3f projdir(0.0f, 0.0f, 0.0f);
   camera->orientation.getValue().multVec(SbVec3f(0.0f, 0.0f, -1.0f), projdir);
-  SbVec3f focalpoint = camera->position.getValue() + projdir * focaldistance;
+  SbVec3d focalpoint = camera->position.getValue() + SbVec3d(projdir) * double(focaldistance);
 
   float newdistance = this->unitydistance / zoomvalue;
-  camera->position.setValue(focalpoint - projdir * newdistance);
+  camera->position.setValue(focalpoint - SbVec3d(projdir) * double(newdistance));
   camera->focalDistance.setValue(newdistance);
 }
 
@@ -492,8 +492,8 @@ SoPerspectiveCameraManager::adjustZoomByDollyDistance(float distance, SbBool lim
   }
   SbVec3f projdir(0.0f, 0.0f, 0.0f);
   camera->orientation.getValue().multVec(SbVec3f(0.0f, 0.0f, -1.0f), projdir);
-  SbVec3f focalpoint = camera->position.getValue() + projdir * focaldistance;
-  camera->position.setValue(focalpoint - projdir * newdistance);
+  SbVec3d focalpoint = camera->position.getValue() + SbVec3d(projdir) * double(focaldistance);
+  camera->position.setValue(focalpoint - SbVec3d(projdir) * double(newdistance));
   camera->focalDistance.setValue(newdistance);
 }
 
@@ -513,8 +513,8 @@ SoPerspectiveCameraManager::adjustZoomByDolly(float factor, SbBool limit)
   }
   SbVec3f projdir(0.0f, 0.0f, 0.0f);
   camera->orientation.getValue().multVec(SbVec3f(0.0f, 0.0f, -1.0f), projdir);
-  SbVec3f focalpoint = camera->position.getValue() + projdir * focaldistance;
-  camera->position.setValue(focalpoint - projdir * newdistance);
+  SbVec3d focalpoint = camera->position.getValue() + SbVec3d(projdir) * double(focaldistance);
+  camera->position.setValue(focalpoint - SbVec3d(projdir) * double(newdistance));
   camera->focalDistance.setValue(newdistance);
 }
 

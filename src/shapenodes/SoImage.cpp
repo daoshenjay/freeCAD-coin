@@ -106,7 +106,7 @@
     viewer->show();
 
     SoCamera * cam = viewer->getCamera();
-    cam->position = SbVec3f(0, 0, 50);
+    cam->position = SbVec3d(0, 0, 50);
     cam->focalDistance = 50;
 
     SoQt::show(mainwin);

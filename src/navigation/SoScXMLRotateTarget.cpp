@@ -419,21 +419,21 @@ SoScXMLRotateTarget::reorientCamera(SoCamera * camera, const SbRotation & rot)
   // Find global coordinates of focal point.
   SbVec3f direction;
   camera->orientation.getValue().multVec(SbVec3f(0, 0, -1), direction);
-  SbVec3f focalpoint = camera->position.getValue() +
-    camera->focalDistance.getValue() * direction;
+  SbVec3d focalpoint = camera->position.getValue() +
+    SbVec3d(direction) * double(camera->focalDistance.getValue());
 
   // Set new orientation value by accumulating the new rotation.
   camera->orientation = rot * camera->orientation.getValue();
 
   // Reposition camera so we are still pointing at the same old focal point.
   camera->orientation.getValue().multVec(SbVec3f(0, 0, -1), direction);
-  camera->position = focalpoint - camera->focalDistance.getValue() * direction;
+  camera->position = focalpoint - SbVec3d(direction) * double(camera->focalDistance.getValue());
 
   // some custom code to support UTMCamera cameras
   static const SoType utmcamtype(SoType::fromName("UTMCamera"));
   if (utmcamtype != SoType::badType() && camera->isOfType(utmcamtype)) {
     SbVec3d offset;
-    offset.setValue(camera->position.getValue());
+    offset = camera->position.getValue();
     SoSFVec3d * utmpositionfield = coin_assert_cast<SoSFVec3d *>(camera->getField("utmposition"));
     utmpositionfield->setValue(utmpositionfield->getValue()+offset);
     camera->position.setValue(0.0f, 0.0f, 0.0f);

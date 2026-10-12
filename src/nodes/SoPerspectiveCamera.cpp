@@ -133,8 +133,8 @@ SoPerspectiveCamera::getViewVolume(float useaspectratio) const
 
 // Doc in superclass.
 void
-SoPerspectiveCamera::viewBoundingBox(const SbBox3f & box, float aspect,
-                                     float slack)
+SoPerspectiveCamera::viewBoundingBox(const SbBox3d & box, double aspect,
+                                     double slack)
 {
 #if COIN_DEBUG
   // Only check for "flagged" emptiness, and don't use
@@ -150,45 +150,64 @@ SoPerspectiveCamera::viewBoundingBox(const SbBox3f & box, float aspect,
   // pointing straight at the center of the scene bounding box -- but
   // without modifying the rotation value (so we can't use
   // SoCamera::pointAt()).
-  SbVec3f cameradirection;
-  this->orientation.getValue().multVec(SbVec3f(0, 0, -1), cameradirection);
-  this->position.setValue(box.getCenter() + -cameradirection);
+  //
+  // Everything runs in double: the float32 ULP of absolute coordinates
+  // is 64 mm at 1e9 mm, so boxes smaller than that would collapse to a
+  // point and the camera position offsets below would not survive
+  // float32 storage.
+  double bxmin, bymin, bzmin, bxmax, bymax, bzmax;
+  box.getBounds(bxmin, bymin, bzmin, bxmax, bymax, bzmax);
+  const SbVec3d center(0.5 * (bxmin + bxmax),
+                       0.5 * (bymin + bymax),
+                       0.5 * (bzmin + bzmax));
+  SbVec3f cameradirectionf;
+  this->orientation.getValue().multVec(SbVec3f(0, 0, -1), cameradirectionf);
+  const SbVec3d cameradirection(cameradirectionf[0],
+                                cameradirectionf[1],
+                                cameradirectionf[2]);
+  this->position.setValue(center - cameradirection);
 
 
-  // Get the radius of the bounding sphere.
-  SbSphere bs;
-  bs.circumscribe(box);
-  float radius = bs.getRadius();
+  // Get the radius of the bounding sphere: half of the box diagonal,
+  // computed in double (an SbSphere would round to float32 again).
+  const SbVec3d halfdiag(bxmax - bxmin, bymax - bymin, bzmax - bzmin);
+  double radius = 0.5 * halfdiag.length();
+  // A degenerate (point) box must not collapse the view volume to
+  // near == far == focalDistance == 0 (invisible scene, stuck zoom).
+  // Keep a floor relative to the absolute coordinates (1 mm at 1e9).
+  const double maxabs = SbMax(SbMax(fabs(center[0]), fabs(center[1])),
+                              fabs(center[2]));
+  radius = SbMax(radius, SbMax(1e-9, 1e-9 * maxabs));
 
   // Make sure that everything will still be inside the viewing volume
   // even if the aspect ratio "favorizes" width over height.
-  float aspectradius = radius / (aspect < 1.0f ? aspect : 1.0f);
+  const double aspectradius = radius / (aspect < 1.0 ? aspect : 1.0);
 
   // Move the camera to the edge of the bounding sphere, while still
   // pointing at the scene.
-  SbVec3f direction = this->position.getValue() - box.getCenter();
+  SbVec3d direction = this->position.getValue() - center;
   (void) direction.normalize(); // we know this is not a null vector
 
   // There's a small chance that the frustum will intersect the
   // bounding box when we calculate the movelength like this, but for
   // all normal heightAngles it will yield a much better fit than
   // the 100% safe version which also adds radius to movelength
-  float movelength = aspectradius/float(tan(this->heightAngle.getValue() / 2.0));
-  this->position.setValue(box.getCenter() + direction * movelength);
+  double movelength = aspectradius/tan(double(this->heightAngle.getValue()) / 2.0);
+  this->position.setValue(center + direction * movelength);
 
   // Set up the clipping planes according to the slack value (a value
   // of 1.0 will yield clipping planes that are tangent to the
   // bounding sphere of the scene).
-  float distance_to_midpoint =
-    (this->position.getValue() - box.getCenter()).length();
+  double distance_to_midpoint =
+    (this->position.getValue() - center).length();
   // make sure nearDistance isn't 0.0 (or too close to 0.0)
-  const float EPS = 0.001f;
-  this->nearDistance = SbMax(distance_to_midpoint*EPS, distance_to_midpoint - radius * slack);
-  this->farDistance = distance_to_midpoint + radius * slack;
+  const double EPS = 0.001;
+  this->nearDistance = float(SbMax(distance_to_midpoint*EPS, distance_to_midpoint - radius * slack));
+  this->farDistance = float(distance_to_midpoint + radius * slack);
 
   // The focal distance is simply the distance from the camera to the
   // scene midpoint. This field is not used in rendering, its just
   // provided to make it easier for the user to do calculations based
   // on the distance between the camera and the scene.
-  this->focalDistance = distance_to_midpoint;
+  this->focalDistance = float(distance_to_midpoint);
 }

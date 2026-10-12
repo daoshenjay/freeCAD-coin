@@ -127,7 +127,9 @@ SoRenderManagerP::setClippingPlanes(void)
   xbox.transform(inverse);
 
   SbMatrix mat;
-  mat.setTranslate(- camera->position.getValue());
+  // Explicit downcast: SbMatrix / SbXfBox3f are float32 throughout;
+  // this feeds only the automatic near/far computation.
+  mat.setTranslate(SbVec3f(-camera->position.getValue()));
   xbox.transform(mat);
   mat = camera->orientation.getValue().inverse();
   xbox.transform(mat);

@@ -616,7 +616,7 @@ SoSceneTextureCubeMapP::ensureCamera(void)
     }
     if (this->cachedCamera) this->cachedCamera->unref();
     this->cachedCamera = new SoPerspectiveCamera;
-    this->cachedCamera->position = SbVec3f(0, 0, 0);
+    this->cachedCamera->position = SbVec3d(0, 0, 0);
     this->cachedCamera->nearDistance = 0.1f;
     this->cachedCamera->farDistance = 100;
     ((SoPerspectiveCamera*)this->cachedCamera)->heightAngle =

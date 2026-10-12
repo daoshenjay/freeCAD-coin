@@ -89,6 +89,22 @@ SoViewingMatrixElement::set(SoState * const state,
 
 //! FIXME: write doc.
 
+void
+SoViewingMatrixElement::setDP(SoState * const state,
+                              SoNode * const node,
+                              const SbDPMatrix & viewingMatrix)
+{
+  SoViewingMatrixElement * element = coin_safe_cast<SoViewingMatrixElement *>
+    (
+     SoReplacedElement::getElement(state, classStackIndex, node)
+     );
+  if (element) {
+    element->setEltDP(viewingMatrix);
+  }
+}
+
+//! FIXME: write doc.
+
 const SbMatrix &
 SoViewingMatrixElement::get(SoState * const state)
 {
@@ -101,6 +117,22 @@ SoViewingMatrixElement::get(SoState * const state)
 }
 
 /*!
+  Returns the double precision view matrix. The GL rendering path
+  composes and downloads this matrix, so the world->eye translation
+  is not rounded to float32 before the final GPU download.
+*/
+const SbDPMatrix &
+SoViewingMatrixElement::getDP(SoState * const state)
+{
+  const SoViewingMatrixElement * element =
+    coin_assert_cast<const SoViewingMatrixElement *>
+    (
+     SoElement::getConstElement(state, classStackIndex)
+     );
+  return element->viewingMatrixDP;
+}
+
+/*!
   Initializes the element to its default value. The default
   value is the identity matrix.
 */
@@ -110,6 +142,7 @@ SoViewingMatrixElement::init(SoState * state)
 {
   inherited::init(state);
   viewingMatrix.makeIdentity();
+  viewingMatrixDP.makeIdentity();
 #if 0 // debug
   SoDebugError::postInfo("SoViewingMatrixElement::init",
                          "matrix set to identity");
@@ -122,9 +155,22 @@ void
 SoViewingMatrixElement::setElt(const SbMatrix &matrix)
 {
   this->viewingMatrix = matrix;
+  this->viewingMatrixDP = SbDPMatrix(matrix);
 #if 0 // debug
   SoDebugError::postInfo("SoViewingMatrixElement::setElt",
                          "viewingmatrix:");
   matrix.print(stdout);
 #endif // debug
+}
+
+/*!
+  Sets the double precision matrix; the float32 member is kept as a
+  lossy downcast copy for the classic get() API.
+*/
+
+void
+SoViewingMatrixElement::setEltDP(const SbDPMatrix &matrix)
+{
+  this->viewingMatrixDP = matrix;
+  this->viewingMatrix = SbMatrix(matrix);
 }

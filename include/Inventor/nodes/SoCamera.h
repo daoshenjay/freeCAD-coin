@@ -39,11 +39,13 @@
 #include <Inventor/fields/SoSFRotation.h>
 #include <Inventor/fields/SoSFEnum.h>
 #include <Inventor/fields/SoSFVec3f.h>
+#include <Inventor/fields/SoSFVec3d.h>
 #include <Inventor/fields/SoSFFloat.h>
 
 #include <Inventor/SbVec3f.h>
 #include <Inventor/SbMatrix.h>
 #include <Inventor/SbBox3f.h>
+#include <Inventor/SbBox3d.h>
 
 #define SO_ASPECT_SQUARE        1.0f
 #define SO_ASPECT_VIDEO         (4.0f/3.0f)
@@ -78,7 +80,9 @@ public:
   };
 
   SoSFEnum viewportMapping;
-  SoSFVec3f position;
+  // f64 camera position: fit/navigation offsets below the float32 ULP of
+  // absolute coordinates (64 mm at 1e9 mm) would otherwise collapse.
+  SoSFVec3d position;
   SoSFRotation orientation;
   SoSFFloat aspectRatio;
   SoSFFloat nearDistance;
@@ -122,8 +126,16 @@ public:
   void handleEvent(SoHandleEventAction * action) override;
   void rayPick(SoRayPickAction * action) override;
   void getPrimitiveCount(SoGetPrimitiveCountAction * action) override;
+  /** Frame the given bounding box. The float32 overload converts to
+      the double precision overload below; do not override it. */
   virtual void viewBoundingBox(const SbBox3f & box, float aspect,
-                               float slack) = 0;
+                               float slack);
+  /** Frame the given bounding box. Double precision: at coordinates
+      around 1e9 the float32 ULP is 64 mm, so boxes smaller than that
+      would collapse to a point if computed with float32. Implement
+      this method in camera subclasses. */
+  virtual void viewBoundingBox(const SbBox3d & box, double aspect,
+                               double slack) = 0;
 protected:
   SoCamera(void);
   virtual ~SoCamera();

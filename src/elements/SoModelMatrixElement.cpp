@@ -341,6 +341,7 @@ void
 SoModelMatrixElement::makeEltIdentity(void)
 {
   this->modelMatrix.makeIdentity();
+  this->modelMatrixDP.makeIdentity();
   this->flags = FLG_IDENTITY;
 }
 
@@ -352,6 +353,7 @@ void
 SoModelMatrixElement::setElt(const SbMatrix & matrix)
 {
   this->modelMatrix = matrix;
+  this->modelMatrixDP = SbDPMatrix(matrix);
   this->flags &= ~(FLG_IDENTITY|FLG_COMBINED);
 }
 
@@ -363,6 +365,7 @@ void
 SoModelMatrixElement::multElt(const SbMatrix & matrix)
 {
   this->modelMatrix.multLeft(matrix);
+  this->modelMatrixDP.multLeft(SbDPMatrix(matrix));
   this->flags &= ~(FLG_IDENTITY|FLG_COMBINED);
 }
 
@@ -376,6 +379,7 @@ SoModelMatrixElement::translateEltBy(const SbVec3f & translation)
   SbMatrix matrix = SbMatrix::identity();
   matrix.setTranslate(translation);
   this->modelMatrix.multLeft(matrix);
+  this->modelMatrixDP.multLeft(SbDPMatrix(matrix));
   this->flags &= ~(FLG_IDENTITY|FLG_COMBINED);
 }
 
@@ -389,6 +393,7 @@ SoModelMatrixElement::rotateEltBy(const SbRotation & rotation)
   SbMatrix matrix = SbMatrix::identity();
   matrix.setRotate(rotation);
   this->modelMatrix.multLeft(matrix);
+  this->modelMatrixDP.multLeft(SbDPMatrix(matrix));
   this->flags &= ~(FLG_IDENTITY|FLG_COMBINED);
 }
 
@@ -402,6 +407,7 @@ SoModelMatrixElement::scaleEltBy(const SbVec3f & scaleFactor)
   SbMatrix matrix = SbMatrix::identity();
   matrix.setScale(scaleFactor);
   this->modelMatrix.multLeft(matrix);
+  this->modelMatrixDP.multLeft(SbDPMatrix(matrix));
   this->flags &= ~(FLG_IDENTITY|FLG_COMBINED);
 }
 
@@ -424,6 +430,11 @@ void
 SoModelMatrixElement::popMatrixElt(const SbMatrix & matrix)
 {
   this->modelMatrix = matrix;
+  // pushMatrix()/popMatrix() travel through the float32 API only, so the
+  // restored double shadow equals the widened snapshot. This path is used
+  // by SoTransformSeparator/SoBBoxModelMatrixElement only; the separator
+  // push()/pop() path (see push() below) restores the double shadow exactly.
+  this->modelMatrixDP = SbDPMatrix(matrix);
 }
 
 /*!
@@ -435,6 +446,7 @@ SoModelMatrixElement::init(SoState * state)
 {
   inherited::init(state);
   this->modelMatrix.makeIdentity();
+  this->modelMatrixDP.makeIdentity();
   this->flags = FLG_IDENTITY;
   this->clearNodeIds();
 }
@@ -452,6 +464,7 @@ SoModelMatrixElement::push(SoState * state)
      );
 
   this->modelMatrix = prev->modelMatrix;
+  this->modelMatrixDP = prev->modelMatrixDP;
   this->flags = prev->flags;
   // only copy when needed
   if (prev->flags & FLG_CULLMATRIX)

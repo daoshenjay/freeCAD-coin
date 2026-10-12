@@ -54,13 +54,25 @@ public:
   static SbUniqueId getNodeId(SoState * const state);
   static SbMatrix getResetMatrix(SoState * state);
 
+  // Returns TRUE when the modelview matrix can be downloaded as a
+  // single model*view product composed in double precision (no
+  // transformations precede the camera in the scene graph).
+  static SbBool useFullCompositing(SoState * state);
+  // Downloads modelmatrix * viewingMatrix to GL with the composition
+  // done in double, so camera/model translations beyond float32
+  // resolution cancel exactly before the matrix is narrowed for the
+  // driver.
+  static void loadFullMatrix(SoState * state, const SbDPMatrix & modelmatrix);
+
 protected:
   void setElt(const SbMatrix & matrix) override;
+  void setEltDP(const SbDPMatrix & matrix) override;
 
 private:
   SoState * state;
   SbMatrix modelmatrix;
   SbBool mmidentity;
+  void afterset(void);
   void updategl(void);
 };
 
