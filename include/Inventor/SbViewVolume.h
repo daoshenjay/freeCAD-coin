@@ -40,6 +40,8 @@
 #include <Inventor/SbDPViewVolume.h>
 
 class SbBox3f;
+class SbDPLine;
+class SbDPPlane;
 class SbLine;
 class SbMatrix;
 class SbPlane;
@@ -62,10 +64,15 @@ public:
   SbMatrix getMatrix(void) const;
   SbMatrix getCameraSpaceMatrix(void) const;
   void projectPointToLine(const SbVec2f& pt, SbLine& line) const;
+  // Double-precision variant: keeps the projected line endpoints below
+  // the float32 ULP of the absolute scene coordinates.
+  void projectPointToLine(const SbVec2f& pt, SbDPLine& line) const;
   void projectPointToLine(const SbVec2f& pt,
                           SbVec3f& line0, SbVec3f& line1) const;
   void projectToScreen(const SbVec3f& src, SbVec3f& dst) const;
   SbPlane getPlane(const float distFromEye) const;
+  // Double-precision variant of getPlane(): see SbDPViewVolume::getPlaneDP().
+  SbDPPlane getPlaneDP(const double distFromEye) const;
   SbVec3f getSightPoint(const float distFromEye) const;
   SbVec3f getPlanePoint(const float distFromEye,
                         const SbVec2f& normPoint) const;

@@ -41,6 +41,7 @@
 class SbBox3f;
 class SbDPLine;
 class SbDPMatrix;
+class SbDPPlane;
 class SbPlane;
 class SbDPRotation;
 class SbVec2d;
@@ -61,6 +62,11 @@ public:
                           SbVec3d& line0, SbVec3d& line1) const;
   void projectToScreen(const SbVec3d& src, SbVec3d& dst) const;
   SbPlane getPlane(const double distFromEye) const;
+  // Double-precision variant: getPlane() narrows the plane point (~dot
+  // (normal, point), on the order of the absolute scene coordinates) to
+  // float32, which quantizes the plane offset to the float32 ULP at large
+  // coordinates.
+  SbDPPlane getPlaneDP(const double distFromEye) const;
   SbVec3d getSightPoint(const double distFromEye) const;
   SbVec3d getPlanePoint(const double distFromEye,
                         const SbVec2d& normPoint) const;

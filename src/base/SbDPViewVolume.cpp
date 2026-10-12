@@ -455,6 +455,14 @@ SbDPViewVolume::getPlane(const double distFromEye) const
                  dp_to_sbvec3f(this->projPoint + distFromEye * this->projDir));
 }
 
+// Double-precision variant of getPlane(): see header for details.
+SbDPPlane
+SbDPViewVolume::getPlaneDP(const double distFromEye) const
+{
+  return SbDPPlane(-this->projDir,
+                   this->projPoint + distFromEye * this->projDir);
+}
+
 /*!
   Returns the point on the center line-of-sight from the camera position
   with the given distance.

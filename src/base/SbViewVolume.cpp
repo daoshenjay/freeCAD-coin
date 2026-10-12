@@ -64,6 +64,7 @@
 #include <Inventor/SbVec2d.h>
 #include <Inventor/SbMatrix.h>
 #include <Inventor/SbPlane.h>
+#include <Inventor/SbDPPlane.h>
 #include <Inventor/SbBox2f.h>
 #include <Inventor/SbBox3f.h>
 #include <Inventor/SbClip.h>
@@ -264,6 +265,15 @@ SbViewVolume::projectPointToLine(const SbVec2f& pt, SbLine& line) const
   line.setValue(to_sbvec3f(pt0), to_sbvec3f(pt1));
 }
 
+// Double-precision variant of projectPointToLine(): keeps the projected
+// line endpoints below the float32 ULP of the absolute scene coordinates.
+void
+SbViewVolume::projectPointToLine(const SbVec2f& pt, SbDPLine& line) const
+{
+  SbVec2d dppt(pt[0], pt[1]);
+  this->dpvv.projectPointToLine(dppt, line);
+}
+
 /*!
   Project the given 2D point from the projection plane into two points
   defining a 3D line. The first point, \a line0, will be the
@@ -316,6 +326,13 @@ SbPlane
 SbViewVolume::getPlane(const float distFromEye) const
 {
   return this->dpvv.getPlane(distFromEye);
+}
+
+// Double-precision variant of getPlane(): see SbDPViewVolume::getPlaneDP().
+SbDPPlane
+SbViewVolume::getPlaneDP(const double distFromEye) const
+{
+  return this->dpvv.getPlaneDP(distFromEye);
 }
 
 /*!
