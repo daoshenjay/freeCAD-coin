@@ -34,9 +34,10 @@
 \**************************************************************************/
 
 #include <Inventor/elements/SoSubElement.h>
-#include <Inventor/SbPlane.h>
+#include <Inventor/SbDPPlane.h>
 
 class SbBox3f;
+class SbPlane;
 class SbViewVolume;
 
 class COIN_DLL_API SoCullElement : public SoElement {
@@ -69,7 +70,12 @@ private:
   static SbBool docull(SoState * state, const SbBox3f & box, const SbBool transform,
                        const SbBool updateelem);
 
-  SbPlane plane[MAXPLANES];
+  // The six view volume planes (plus any app-added planes) are kept in
+  // double precision: at 1e9 mm coordinates a float32 plane quantizes to
+  // a 64 mm grid, which made the culling verdict flip while the camera
+  // panned or zoomed, so objects near a frustum plane flickered in and
+  // out of view.
+  SbDPPlane plane[MAXPLANES];
   int numplanes;
   unsigned int flags;
   int vvindex;

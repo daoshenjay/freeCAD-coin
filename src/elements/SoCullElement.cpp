@@ -84,6 +84,8 @@
 #include <Inventor/elements/SoModelMatrixElement.h>
 #include <Inventor/misc/SoState.h>
 #include <Inventor/SbBox3f.h>
+#include <Inventor/SbDPMatrix.h>
+#include <Inventor/SbPlane.h>
 #include <Inventor/SbViewVolume.h>
 #include <cstring>
 #include <cassert>
@@ -171,7 +173,7 @@ SoCullElement::setViewVolume(SoState * state, const SbViewVolume & vv)
       return;
     }
     int i;
-    SbPlane vvplane[6];
+    SbDPPlane vvplane[6];
     vv.getViewVolumePlanes(vvplane);
     if (elem->vvindex >= 0) { // overwrite old view volume
       for (i = 0; i < 6; i++) {
@@ -205,7 +207,11 @@ SoCullElement::addPlane(SoState * state, const SbPlane &newplane)
 #endif // COIN_DEBUG
       return;
     }
-    elem->plane[elem->numplanes++] = newplane;
+    // Widen the float32 plane to double; the element stores planes in
+    // double precision (see the plane[] declaration in the header).
+    elem->plane[elem->numplanes++] =
+      SbDPPlane(SbVec3d(newplane.getNormal()),
+                static_cast<double>(newplane.getDistanceFromOrigin()));
   }
 }
 
@@ -280,38 +286,44 @@ SoCullElement::docull(SoState * state, const SbBox3f & box, const SbBool transfo
   const SoCullElement * elem = coin_safe_cast<const SoCullElement *>
     (
      state->getElementNoPush(classStackIndex)
-    );
+     );
 
   if (!elem) return FALSE;
 
   int i, j;
-  SbVec3f min, max;
-  min = box.getMin();
-  max = box.getMax();
-  SbVec3f pts[8];
+  // Double precision corner transform and plane test: a float32 plane
+  // at 1e9 mm coordinates quantizes to a 64 mm grid, which made the
+  // in/out verdict flip while the camera panned or zoomed (objects
+  // near a frustum plane flickered). Keeping the corner transform and
+  // the halfspace test in double pins the verdict to the true
+  // geometry instead of the float32 quantization of the planes.
+  SbVec3f fmin, fmax;
+  fmin = box.getMin();
+  fmax = box.getMax();
+  SbVec3d pts[8];
 
-  SbMatrix mm;
+  SbDPMatrix mm;
   SbBool identity = ! transform;
   if (transform) {
     SbBool wasopen = state->isCacheOpen();
     // close the cache, since we don't create a cache dependency on
     // the model matrix element
     state->setCacheOpen(FALSE);
-    mm = SoModelMatrixElement::get(state);
+    mm = SoModelMatrixElement::getDPMatrix(state);
     state->setCacheOpen(wasopen);
   }
 
   // create the 8 box corner points
   for (i = 0; i < 8; i++) {
-    pts[i][0] = i & 1 ? min[0] : max[0];
-    pts[i][1] = i & 2 ? min[1] : max[1];
-    pts[i][2] = i & 4 ? min[2] : max[2];
+    pts[i][0] = i & 1 ? fmin[0] : fmax[0];
+    pts[i][1] = i & 2 ? fmin[1] : fmax[1];
+    pts[i][2] = i & 4 ? fmin[2] : fmax[2];
     if (!identity) mm.multVecMatrix(pts[i], pts[i]);
   }
 
   const int n = elem->numplanes;
   unsigned int flags = elem->flags;
-  const SbPlane * planes = elem->plane;
+  const SbDPPlane * planes = elem->plane;
   unsigned int mask = 0x0001;
 
   for (i = 0; i < n; i++, mask<<=1) {

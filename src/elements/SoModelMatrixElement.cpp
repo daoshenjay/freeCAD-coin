@@ -334,6 +334,19 @@ SoModelMatrixElement::get(SoState * const state,
 }
 
 /*!
+  Returns the current model matrix as a double precision matrix.
+*/
+const SbDPMatrix &
+SoModelMatrixElement::getDPMatrix(SoState * const state)
+{
+  const SoModelMatrixElement * elem = coin_assert_cast<const SoModelMatrixElement *>
+    (
+     SoElement::getConstElement(state, classStackIndex)
+     );
+  return elem->modelMatrixDP;
+}
+
+/*!
   virtual method which is called from the static method
   makeIdentity(). Sets element model matrix to identity.
 */

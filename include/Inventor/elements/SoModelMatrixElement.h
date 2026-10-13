@@ -71,6 +71,10 @@ public:
   static const SbMatrix & getCombinedCullMatrix(SoState * const state);
   static const SbMatrix & get(SoState * const state);
   static const SbMatrix & get(SoState * const state, SbBool & isIdentity);
+  // Double precision shadow of the model matrix (see modelMatrixDP).
+  // View frustum culling uses this to keep the corner transform exact
+  // for absolute coordinates beyond the float32 ULP.
+  static const SbDPMatrix & getDPMatrix(SoState * const state);
 
   const SbMatrix & getModelMatrix(void) const;
 

@@ -753,6 +753,14 @@ SbViewVolume::getViewVolumePlanes(SbPlane planes[6]) const
   this->dpvv.getViewVolumePlanes(planes);
 }
 
+// Double-precision variant: keeps the frustum planes exact for absolute
+// coordinates beyond the float32 ULP (see SbDPViewVolume::getViewVolumePlanes).
+void
+SbViewVolume::getViewVolumePlanes(SbDPPlane planes[6]) const
+{
+  this->dpvv.getViewVolumePlanes(planes);
+}
+
 /*!
   Transform the viewing volume by \a matrix.
  */

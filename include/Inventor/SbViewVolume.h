@@ -109,6 +109,9 @@ public:
 
   void print(FILE * fp) const;
   void getViewVolumePlanes(SbPlane planes[6]) const;
+  // Double-precision variant of getViewVolumePlanes(): see
+  // SbDPViewVolume::getViewVolumePlanes(SbDPPlane planes[6]).
+  void getViewVolumePlanes(SbDPPlane planes[6]) const;
   void transform(const SbMatrix &matrix);
   SbVec3f getViewUp(void) const;
 

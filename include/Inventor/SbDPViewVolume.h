@@ -102,6 +102,10 @@ public:
 
   void print(FILE * fp) const;
   void getViewVolumePlanes(SbPlane planes[6]) const;
+  // Double-precision variant: keeps the six frustum planes exact for
+  // absolute coordinates beyond the float32 ULP (64 mm at 1e9 mm), so
+  // view frustum culling does not flip while the camera pans/zooms.
+  void getViewVolumePlanes(SbDPPlane planes[6]) const;
   void transform(const SbDPMatrix &matrix);
   SbVec3d getViewUp(void) const;
 

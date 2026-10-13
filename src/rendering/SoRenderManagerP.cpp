@@ -33,6 +33,7 @@
 #include "SoRenderManagerP.h"
 #include "coindefs.h"
 
+#include <cmath>
 #include <limits>
 
 #include <Inventor/nodes/SoInfo.h>
@@ -120,6 +121,36 @@ SoRenderManagerP::setClippingPlanes(void)
   }
   this->getbboxaction->apply(scene);
 
+  // A float32 bounding box collapses at large absolute coordinates: the
+  // float32 ULP is 64 mm at 1e9 mm, so a scene box smaller than a few
+  // ULPs at its coordinate magnitude carries mostly quantization noise.
+  // Driving the clipping planes from such a box would slice straight
+  // through the geometry; keep the camera's current near/far instead.
+  // The check must happen on the world-space box: once the box has been
+  // transformed into camera space its coordinates are small again, and
+  // the ULP test would use the camera-space ULP and never trigger.
+  // (The empty-box fallback below is left alone: it deliberately resets
+  // the planes to a sane default rather than keeping stale values.)
+  {
+    SbBox3f wbox = this->getbboxaction->getBoundingBox();
+    if (!wbox.isEmpty()) {
+      float maxabs = 0.0f;
+      for (int i = 0; i < 3; i++) {
+        maxabs = SbMax(maxabs, SbAbs(wbox.getMin()[i]));
+        maxabs = SbMax(maxabs, SbAbs(wbox.getMax()[i]));
+      }
+      if (maxabs > 1.0f) {
+        float wsizeX, wsizeY, wsizeZ;
+        wbox.getSize(wsizeX, wsizeY, wsizeZ);
+        const float wdiag = sqrtf(wsizeX * wsizeX + wsizeY * wsizeY + wsizeZ * wsizeZ);
+        const float ulp = std::ldexp(1.0f, std::ilogb(maxabs) - 23);
+        if (wdiag < 4.0f * ulp) {
+          return;
+        }
+      }
+    }
+  }
+
   SbXfBox3f xbox = this->getbboxaction->getXfBoundingBox();
   SbMatrix cammat;
   SbMatrix inverse;
@@ -141,34 +172,111 @@ SoRenderManagerP::setClippingPlanes(void)
 
   // Clipping offset is 1% of the bounding box diagonal or at most 1.0 and at least std::numeric_limits<float>::epsilon()
   float clippingOffset = SbMin(1.0f, SbMax(std::numeric_limits<float>::epsilon(), 0.01f * boxDiagonal));
-  float nearval = -box.getMax()[2] - clippingOffset;
-  float farval = -box.getMin()[2] + clippingOffset;
 
-  if (!camera->isOfType(SoOrthographicCamera::getClassTypeId()) && farval <= 0.0f) return;
+  float nearval;
+  float farval;
 
   if (box.isEmpty()) {
+    // An empty computed box usually means the float32 camera-space
+    // transform collapsed at large coordinates, not that the scene is
+    // empty.  Keep current planes when they are usable instead of
+    // resetting to a tiny default that would far-clip the scene; only
+    // fall back to the default when the camera itself carries
+    // degenerate values.
+    const float curnear = camera->nearDistance.getValue();
+    const float curfar = camera->farDistance.getValue();
+    if (curnear == curnear && curfar == curfar  // not NaN
+        && curfar > 0.0f && curfar > SbAbs(curnear)) {
+      return;
+    }
     nearval = 1;
     farval = 10;
   }
-
-  if (camera->isOfType(SoPerspectiveCamera::getClassTypeId())) {
-    float nearlimit;
-    if (this->autoclipping == SoRenderManager::FIXED_NEAR_PLANE) {
-      nearlimit = this->nearplanevalue;
-    } else {
-      int depthbits = -1; // FIXME:   (20070628 frodo)
-      if (depthbits < 0) depthbits = 32;
-      int use_bits = (int) (float(depthbits) * (1.0f - this->nearplanevalue));
-      float r = (float) pow(2.0, double(use_bits));
-      nearlimit = farval / r;
+  else {
+    // In camera space the camera looks down -Z, so geometry with
+    // z > 0 is behind the camera.  Behind-camera content cannot be
+    // seen, and letting it drag the near plane to large negative
+    // values destroys the orthographic depth precision; in the
+    // perspective branch below the nearlimit push would then also
+    // land in front of all real content and clip everything away.
+    // (A scene box that reaches behind the camera is normal: any UI
+    // chrome attached at the world origin -- e.g. a workbench grid --
+    // sits there while the camera frames geometry 1e9 mm away.)
+    if (box.getMin()[2] >= 0.0f) {
+      // The whole box is behind the camera: there is nothing to
+      // frame. Keep the current planes instead of guessing.
+      return;
     }
 
-    if (nearlimit >= farval) {
-      nearlimit = farval / 5000.0f;
+    // Clamp the near side to the in-front half-space.  nearest is the
+    // depth of the nearest in-front content.  It is exact when the
+    // whole box stays in front of the camera; when the box straddles
+    // the camera (chrome behind, geometry in front) the box alone
+    // cannot tell where the in-front content starts, so fall back to
+    // the camera's current planes, which are known-good (they come
+    // from fitToBox or a previous sane update).
+    const float zmax = SbMin(box.getMax()[2], 0.0f);
+    float nearest = -zmax;
+
+    nearval = -zmax - clippingOffset;
+    farval = -box.getMin()[2] + clippingOffset;
+
+    if (nearest <= 0.0f) {
+      const float curnear = camera->nearDistance.getValue();
+      const float curfar = camera->farDistance.getValue();
+      if (curnear > 0.0f) {
+        nearest = curnear;
+      }
+      else if (curfar > 0.0f) {
+        nearest = curfar * 1e-3f;
+      }
     }
 
-    if (nearval < nearlimit) {
-      nearval = nearlimit;
+    // A single distant outlier on the view axis (an object at the
+    // world origin seen from a camera framing geometry at 1e9 mm)
+    // inflates farval by orders of magnitude.  The resulting
+    // near/far span would collapse the depth resolution onto the
+    // nearby content (visible as z-fighting), so cap the span at a
+    // depth ratio the 24-bit depth buffer can still resolve.  Far
+    // content beyond the cap is cleanly far-clipped; a later
+    // view-all recomputes sane values once the camera has moved out.
+    const float MAX_DEPTH_RATIO = 1000.0f;
+    if (nearest > 0.0f) {
+      const float maxfar = nearest * MAX_DEPTH_RATIO;
+      if (farval > maxfar) {
+        farval = maxfar;
+      }
+    }
+
+    if (!camera->isOfType(SoOrthographicCamera::getClassTypeId()) && farval <= 0.0f) return;
+
+    if (camera->isOfType(SoPerspectiveCamera::getClassTypeId())) {
+      float nearlimit;
+      if (this->autoclipping == SoRenderManager::FIXED_NEAR_PLANE) {
+        nearlimit = this->nearplanevalue;
+      } else {
+        int depthbits = -1; // FIXME:   (20070628 frodo)
+        if (depthbits < 0) depthbits = 32;
+        int use_bits = (int) (float(depthbits) * (1.0f - this->nearplanevalue));
+        float r = (float) pow(2.0, double(use_bits));
+        nearlimit = farval / r;
+      }
+
+      if (nearlimit >= farval) {
+        nearlimit = farval / 5000.0f;
+      }
+
+      // The depth-precision heuristic must never clip real content:
+      // pushing the near plane past the nearest in-front geometry
+      // makes objects disappear completely (e.g. farval inflated by
+      // a distant outlier used to push near from ~15 mm to ~4e5 mm).
+      if (nearest > 0.0f && nearlimit > nearest) {
+        nearlimit = nearest;
+      }
+
+      if (nearval < nearlimit) {
+        nearval = nearlimit;
+      }
     }
   }
 

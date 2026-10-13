@@ -1204,6 +1204,30 @@ SbDPViewVolume::print(FILE * fp) const
 void
 SbDPViewVolume::getViewVolumePlanes(SbPlane planes[6]) const
 {
+  SbDPPlane dpplanes[6];
+  this->getViewVolumePlanes(dpplanes);
+
+  for (int i = 0; i < 6; i++) {
+    planes[i] = SbPlane(SbVec3f(dpplanes[i].getNormal()),
+                        static_cast<float>(dpplanes[i].getDistanceFromOrigin()));
+  }
+}
+
+/*!
+  Returns the six planes defining the view volume in the following
+  order: left, bottom, right, top, near, far. Plane normals are
+  directed into the view volume.
+
+  This is the double precision variant of getViewVolumePlanes(SbPlane
+  planes[6]). It keeps every intermediate value in double, so the
+  planes stay exact for absolute coordinates beyond the float32 ULP
+  (64 mm at 1e9 mm). View frustum culling uses this variant to avoid
+  objects flickering in and out of the frustum while the camera
+  pans or zooms at large coordinates.
+*/
+void
+SbDPViewVolume::getViewVolumePlanes(SbDPPlane planes[6]) const
+{
   SbVec3d far_ll;
   SbVec3d far_lr;
   SbVec3d far_ul;
@@ -1212,61 +1236,61 @@ SbDPViewVolume::getViewVolumePlanes(SbPlane planes[6]) const
   this->getPlaneRectangle(this->nearToFar, far_ll, far_lr, far_ul, far_ur);
   SbVec3d near_ur = this->ulf + (this->lrf-this->llf);
 
-  SbVec3f f_ulf = dp_to_sbvec3f(this->ulf + this->projPoint);
-  SbVec3f f_llf = dp_to_sbvec3f(this->llf + this->projPoint);
-  SbVec3f f_lrf = dp_to_sbvec3f(this->lrf + this->projPoint);
-  SbVec3f f_near_ur = dp_to_sbvec3f(near_ur + this->projPoint);
-  SbVec3f f_far_ll = dp_to_sbvec3f(far_ll + this->projPoint);
-  SbVec3f f_far_lr = dp_to_sbvec3f(far_lr + this->projPoint);
-  SbVec3f f_far_ul = dp_to_sbvec3f(far_ul + this->projPoint);
-  SbVec3f f_far_ur = dp_to_sbvec3f(far_ur + this->projPoint);
-  
-  planes[0] = SbPlane(f_ulf, f_llf, f_far_ll);  // left
-  planes[1] = SbPlane(f_llf, f_lrf, f_far_lr); // bottom
-  planes[2] = SbPlane(f_lrf, f_near_ur, f_far_ur); // right
-  planes[3] = SbPlane(f_near_ur, f_ulf, f_far_ul); // top
-  planes[4] = SbPlane(f_ulf, f_near_ur, f_lrf); // near
-  planes[5] = SbPlane(f_far_ll, f_far_lr, f_far_ur); // far
+  SbVec3d d_ulf = this->ulf + this->projPoint;
+  SbVec3d d_llf = this->llf + this->projPoint;
+  SbVec3d d_lrf = this->lrf + this->projPoint;
+  SbVec3d d_near_ur = near_ur + this->projPoint;
+  SbVec3d d_far_ll = far_ll + this->projPoint;
+  SbVec3d d_far_lr = far_lr + this->projPoint;
+  SbVec3d d_far_ul = far_ul + this->projPoint;
+  SbVec3d d_far_ur = far_ur + this->projPoint;
+
+  planes[0] = SbDPPlane(d_ulf, d_llf, d_far_ll);  // left
+  planes[1] = SbDPPlane(d_llf, d_lrf, d_far_lr); // bottom
+  planes[2] = SbDPPlane(d_lrf, d_near_ur, d_far_ur); // right
+  planes[3] = SbDPPlane(d_near_ur, d_ulf, d_far_ul); // top
+  planes[4] = SbDPPlane(d_ulf, d_near_ur, d_lrf); // near
+  planes[5] = SbDPPlane(d_far_ll, d_far_lr, d_far_ur); // far
 
   // check for inverted view volume (negative aspectRatio)
-  if (!planes[0].isInHalfSpace(f_lrf)) {
-    SbVec3f n;
-    float D;
+  if (!planes[0].isInHalfSpace(d_lrf)) {
+    SbVec3d n;
+    double D;
 
     n = planes[0].getNormal();
-    D = planes[0].getDistanceFromOrigin();    
-    planes[0] = SbPlane(-n, -D);
+    D = planes[0].getDistanceFromOrigin();
+    planes[0] = SbDPPlane(-n, -D);
 
     n = planes[2].getNormal();
-    D = planes[2].getDistanceFromOrigin();    
-    planes[2] = SbPlane(-n, -D);
+    D = planes[2].getDistanceFromOrigin();
+    planes[2] = SbDPPlane(-n, -D);
   }
-  if (!planes[1].isInHalfSpace(f_near_ur)) {
-    SbVec3f n;
-    float D;
+  if (!planes[1].isInHalfSpace(d_near_ur)) {
+    SbVec3d n;
+    double D;
 
     n = planes[1].getNormal();
-    D = planes[1].getDistanceFromOrigin();    
-    planes[1] = SbPlane(-n, -D);
+    D = planes[1].getDistanceFromOrigin();
+    planes[1] = SbDPPlane(-n, -D);
 
     n = planes[3].getNormal();
-    D = planes[3].getDistanceFromOrigin();    
-    planes[3] = SbPlane(-n, -D);
-    
+    D = planes[3].getDistanceFromOrigin();
+    planes[3] = SbDPPlane(-n, -D);
+
   }
 
-  if (!planes[4].isInHalfSpace(f_far_ll)) {
-    SbVec3f n;
-    float D;
+  if (!planes[4].isInHalfSpace(d_far_ll)) {
+    SbVec3d n;
+    double D;
 
     n = planes[4].getNormal();
-    D = planes[4].getDistanceFromOrigin();    
-    planes[4] = SbPlane(-n, -D);
+    D = planes[4].getDistanceFromOrigin();
+    planes[4] = SbDPPlane(-n, -D);
 
     n = planes[5].getNormal();
-    D = planes[5].getDistanceFromOrigin();    
-    planes[5] = SbPlane(-n, -D);
-    
+    D = planes[5].getDistanceFromOrigin();
+    planes[5] = SbDPPlane(-n, -D);
+
   }
 
 }
