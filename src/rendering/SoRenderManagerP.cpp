@@ -125,12 +125,15 @@ SoRenderManagerP::setClippingPlanes(void)
   // float32 ULP is 64 mm at 1e9 mm, so a scene box smaller than a few
   // ULPs at its coordinate magnitude carries mostly quantization noise.
   // Driving the clipping planes from such a box would slice straight
-  // through the geometry; keep the camera's current near/far instead.
+  // through the geometry; keep the camera's current near/far instead
+  // (fit widens them by two ULPs, so they are not tangent).
   // The check must happen on the world-space box: once the box has been
   // transformed into camera space its coordinates are small again, and
   // the ULP test would use the camera-space ULP and never trigger.
   // (The empty-box fallback below is left alone: it deliberately resets
   // the planes to a sane default rather than keeping stale values.)
+  float worldulp = 0.0f;  // float32 grid step at the scene's coordinates
+  float wdiag = 0.0f;     // world-space scene diagonal
   {
     SbBox3f wbox = this->getbboxaction->getBoundingBox();
     if (!wbox.isEmpty()) {
@@ -142,9 +145,9 @@ SoRenderManagerP::setClippingPlanes(void)
       if (maxabs > 1.0f) {
         float wsizeX, wsizeY, wsizeZ;
         wbox.getSize(wsizeX, wsizeY, wsizeZ);
-        const float wdiag = sqrtf(wsizeX * wsizeX + wsizeY * wsizeY + wsizeZ * wsizeZ);
-        const float ulp = std::ldexp(1.0f, std::ilogb(maxabs) - 23);
-        if (wdiag < 4.0f * ulp) {
+        wdiag = sqrtf(wsizeX * wsizeX + wsizeY * wsizeY + wsizeZ * wsizeZ);
+        worldulp = std::ldexp(1.0f, std::ilogb(maxabs) - 23);
+        if (wdiag < 4.0f * worldulp) {
           return;
         }
       }
@@ -170,8 +173,32 @@ SoRenderManagerP::setClippingPlanes(void)
   box.getSize(sizeX, sizeY, sizeZ);
   float boxDiagonal = sqrtf(sizeX * sizeX + sizeY * sizeY + sizeZ * sizeZ);
 
+  // The float32 world-to-camera transform above can collapse at large
+  // absolute coordinates: a scene spanning 0..1e9 mm (e.g. a real box at
+  // the world origin next to a model framed at 1e9 mm) leaves only
+  // quantization noise -- tens of grid steps of fake extent -- in camera
+  // space.  Driving the planes from that garbage would far-clip the
+  // actual view; keep the current planes instead.  The world-vs-camera
+  // diagonal ratio tells the cases apart: a legitimately small
+  // camera-space box (content genuinely near the camera) is small in
+  // the world box as well, while the collapse leaves the world diagonal
+  // many orders larger than the noise.
+  if (worldulp > 0.0f && wdiag > 1.0e6f * SbMax(boxDiagonal, worldulp * 1.0e-6f)) {
+    return;
+  }
+
   // Clipping offset is 1% of the bounding box diagonal or at most 1.0 and at least std::numeric_limits<float>::epsilon()
   float clippingOffset = SbMin(1.0f, SbMax(std::numeric_limits<float>::epsilon(), 0.01f * boxDiagonal));
+  // The world-to-camera transform above is float32, so at large absolute
+  // coordinates the box it produces can be off by about one grid step of the
+  // world magnitude (64 mm at 1e9 mm) even though the box and the rendered
+  // geometry mostly share that rounding.  A fixed 1 mm offset then lets the
+  // planes slice through the geometry (visible while rotating).  Floor the
+  // offset at two grid steps; near the origin the step is ~1e-7 mm and this
+  // changes nothing.
+  if (worldulp > 0.0f) {
+    clippingOffset = SbMax(clippingOffset, 2.0f * worldulp);
+  }
 
   float nearval;
   float farval;
@@ -208,29 +235,24 @@ SoRenderManagerP::setClippingPlanes(void)
       return;
     }
 
-    // Clamp the near side to the in-front half-space.  nearest is the
-    // depth of the nearest in-front content.  It is exact when the
-    // whole box stays in front of the camera; when the box straddles
-    // the camera (chrome behind, geometry in front) the box alone
-    // cannot tell where the in-front content starts, so fall back to
-    // the camera's current planes, which are known-good (they come
-    // from fitToBox or a previous sane update).
+    // Clamp the near side to the in-front half-space.  When the box
+    // straddles the camera (chrome behind, geometry in front) the box
+    // alone cannot tell where the in-front content starts, and reusing
+    // the camera's current near as that depth poisons the far plane
+    // below: the MAX_DEPTH_RATIO cap then clamps a huge world-space far
+    // down to current-near * 1000 -- about 0.02 mm for a perspective
+    // fit whose near plane sits at far * 1e-6 -- and far-clips the whole
+    // view.  Keep the current planes instead: they are known-good (they
+    // come from fitToBox, a zoom shift, or a previous sane update).
     const float zmax = SbMin(box.getMax()[2], 0.0f);
     float nearest = -zmax;
 
-    nearval = -zmax - clippingOffset;
-    farval = -box.getMin()[2] + clippingOffset;
-
     if (nearest <= 0.0f) {
-      const float curnear = camera->nearDistance.getValue();
-      const float curfar = camera->farDistance.getValue();
-      if (curnear > 0.0f) {
-        nearest = curnear;
-      }
-      else if (curfar > 0.0f) {
-        nearest = curfar * 1e-3f;
-      }
+      return;
     }
+
+    nearval = nearest - clippingOffset;
+    farval = -box.getMin()[2] + clippingOffset;
 
     // A single distant outlier on the view axis (an object at the
     // world origin seen from a camera framing geometry at 1e9 mm)

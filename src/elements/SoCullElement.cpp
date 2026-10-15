@@ -89,6 +89,8 @@
 #include <Inventor/SbViewVolume.h>
 #include <cstring>
 #include <cassert>
+#include <algorithm>
+#include <cmath>
 
 #include "coindefs.h"
 #include "SbBasicP.h"
@@ -300,6 +302,27 @@ SoCullElement::docull(SoState * state, const SbBox3f & box, const SbBool transfo
   SbVec3f fmin, fmax;
   fmin = box.getMin();
   fmax = box.getMax();
+  // The cached bounding box itself is float32: at large absolute
+  // coordinates its corners round to the float32 grid, so a box whose
+  // true position grazes a frustum plane can have all eight corners
+  // test outside while the geometry inside still renders -- a thin view
+  // volume (e.g. fit on a sub-grid object) then made the object vanish.
+  // Grow the box by one float32 step of its magnitude before the test;
+  // this only overdraws by a grid step near a frustum plane.
+  {
+    double maxabs = 0.0;
+    for (int k = 0; k < 3; k++) {
+      maxabs = std::max(maxabs, std::fabs((double)fmin[k]));
+      maxabs = std::max(maxabs, std::fabs((double)fmax[k]));
+    }
+    if (maxabs > 1.0) {
+      const double ulp = std::ldexp(1.0, std::ilogb(maxabs) - 23);
+      for (int k = 0; k < 3; k++) {
+        fmin[k] = (float)((double)fmin[k] - ulp);
+        fmax[k] = (float)((double)fmax[k] + ulp);
+      }
+    }
+  }
   SbVec3d pts[8];
 
   SbDPMatrix mm;
